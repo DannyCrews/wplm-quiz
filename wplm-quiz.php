@@ -28,6 +28,10 @@ class wplm_quiz {
     add_action( 'save_post', array( $this, 'wplm_save_quizes' ) );
     add_action( 'admin_menu', array( $this, 'wplm_plugin_settings' ) );
     add_shortcode( 'wplm_show_quiz', array( $this, 'wplm_show_quiz' ) );
+    add_action( 'wp_enqueue_scripts', array( $this, 'wplm_frontend_scripts' ) );
+    add_action( 'wp_enqueue_scripts', array( $this, 'wplm_frontend_styles' ) );
+    add_action( 'wp_ajax_nopriv_get_quiz_results', array( $this, 'get_quiz_results' ) );
+    add_action( 'wp_ajax_get_quiz_results', array( $this, 'get_quiz_results' ) );
 
   }
 
@@ -284,16 +288,48 @@ class wplm_quiz {
           $quiz_index = 1;
           while ( $query->have_posts() ) : $query->the_post();
 
-              // Generating the HTML for Questions
+            $question_id = get_the_ID();
 
-          endwhile;
-          wp_reset_query();
+            $question = the_title( '', '', FALSE ) . ' ' . get_the_content();
+
+            $question_answers = json_decode( get_post_meta( $question_id, '_question_answers', true ) );
+
+            $questions_str .= '<li>';
+
+            $questions_str .= '<div class="ques_title"><span class="quiz_num">' . $quiz_index . '</span>' . $question . '</div>';
+
+            $questions_str .= '<div class="ques_answers" data-quiz-id="' . $question_id . '">';
+
+            $quiestion_index = 1;
+
+            foreach ( $question_answers as $key => $value ) {
+
+                if ( '' != $value ) {
+
+                    $questions_str .= $quiestion_index . ' <input type="radio" value="' . $question_index . '" name="ans_' . $question_id . '[]" />' . $value . '<br/>';
+
+                }
+
+                $question_index++;
+
+            }
+
+            $questions_str .= '</div></li>';
+
+            $quiz_index++;
+
+        endwhile;
+        wp_reset_query();
 
           // Embedding Slider
       }
       else {
           $html .= '<div id="timer" style="display: none;"></div>';
           $html .= '<div style="clear: both;"></div></div>';
+          $html .= '<ul id="slider">' . $questions_str;
+          $html .= '<li id="quiz_result_page"><div class="ques_title">Quiz Results <span id="score"></span></div>';
+          $html .= '<div id="quiz_result"></div>';
+          $html .= '</li></ul></div>';
       }
 
 
@@ -302,6 +338,69 @@ class wplm_quiz {
           return $html;
 
       }
+
+  function wplm_frontend_scripts() {
+
+    wp_register_script( 'rhino', plugins_url( 'js/rhinoslider-1.05.min.js', __FILE__ ), array( 'jquery' ) );
+
+    wp_register_script( 'rhino-mousewheel', plugins_url( 'js/mousewheel.js', __FILE__ ), array( 'jquery' ) );
+
+    wp_register_script( 'rhino-easing', plugins_url( 'js/easing.js', __FILE__ ), array( 'jquery' ) );
+
+    wp_register_script( 'quiz', plugins_url( 'js/quiz.js', __FILE__ ), array( 'jquery', 'rhino', 'rhino-mousewheel', 'rhino-easing' ) );
+
+    wp_enqueue_script( 'quiz' );
+
+    $quiz_duration = get_option( 'wplm_duration' );
+
+    $quiz_duration = ( ! empty( $quiz_duration ) ) ? $quiz_duration : 300;
+
+    $config_array = array(
+
+        'ajaxURL' => admin_url( 'admin-ajax.php' ),
+
+        'quizNonce' => wp_create_nonce( 'quiz-nonce' ),
+
+        'quizDuration' => $quiz_duration,
+
+        'plugin_url' => $this->plugin_url
+
+    );
+
+    wp_localize_script( 'quiz', 'quiz', $config_array );
+
+  }
+
+  function wplm_frontend_styles() {
+    wp_register_style( 'rhino-base', plugins_url( 'css/rhinoslider-1.05.css', __FILE__ ) );
+    wp_enqueue_style( 'rhino-base' );
+  }
+
+  function get_quiz_results() {
+    $score = 0;
+    $question_answers = $_POST["data"];
+    $question_results = array();
+
+    foreach ( $question_answers as $ques_id => $answer ) {
+        $question_id = trim( str_replace( 'qid_', '', $ques_id ) ) . ',';
+        $correct_answer = get_post_meta( $question_id, '_question_correct_answer', true );
+        if ( $answer == $correct_answer ) {
+            $score++;
+            $question_results["$question_id"] = array( "answer" => $answer, "correct_answer" => $correct_answer, "mark" => "correct" );
+        }
+        else {
+            $question_results["$question_id"] = array( "answer" => $answer, "correct_answer" => $correct_answer, "mark" => "incorrect" );
+        }
+    }
+    $total_questions = count( $question_answers );
+    $quiz_result_data = array(
+        "total_questions" => $total_questions,
+        "score" => $score,
+        "result" => $question_results
+    );
+    echo json_encode( $quiz_result_data );
+    exit;
+  }
 
 }
 
