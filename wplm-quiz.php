@@ -257,12 +257,51 @@ class wplm_quiz {
     $html .= '<div class="complete toolbar_item" ><input type="button" id="completeQuiz" value="Get Results" /></div>';
 
     // Implementation of Form Submission
+    $questions_str = "";
 
-    // Displaying the Quiz as unorderd list
+      if ( isset( $_POST['wplm_action'] ) && 'select_quiz_cat' == $_POST['wplm_action'] ) {
+          $html .= '<div id="timer" style="display: block;"></div>';
+          $html .= '<div style="clear: both;"></div></div>';
 
-    return $html;
+          $quiz_category_id = $_POST['quiz_category'];
+          $quiz_num = get_option( 'wplm_num_questions' );
+          $args = array(
+              'post_type' => 'wplm_quiz',
+              'tax_query' => array(
+                  array(
+                      'taxonomy' => 'quiz_categories',
+                      'field' => 'id',
+                      'terms' => $quiz_category_id
+                  )
+              ),
+              'orderby' => 'rand',
+              'post_status' => 'publish',
+              'posts_per_page' => $quiz_num
+          );
 
-}
+          $query = new WP_Query( $args );
+
+          $quiz_index = 1;
+          while ( $query->have_posts() ) : $query->the_post();
+
+              // Generating the HTML for Questions
+
+          endwhile;
+          wp_reset_query();
+
+          // Embedding Slider
+      }
+      else {
+          $html .= '<div id="timer" style="display: none;"></div>';
+          $html .= '<div style="clear: both;"></div></div>';
+      }
+
+
+          // Displaying the Quiz as unordered list
+
+          return $html;
+
+      }
 
 }
 
